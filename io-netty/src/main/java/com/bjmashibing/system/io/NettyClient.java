@@ -13,10 +13,6 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 
 
-/**
- * @author: 马士兵教育
- * @create: 2020-04-26 15:59
- */
 public class NettyClient {
 
     public static void main(String[] args) {

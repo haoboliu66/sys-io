@@ -4,6 +4,8 @@ import com.bjmashibing.system.rpcdemo.proxy.MyProxy;
 import com.bjmashibing.system.rpcdemo.rpc.Dispatcher;
 import com.bjmashibing.system.rpcdemo.rpc.protocol.MyContent;
 import com.bjmashibing.system.rpcdemo.rpc.transport.MyHttpRpcHandler;
+import com.bjmashibing.system.rpcdemo.rpc.transport.ServerDecode;
+import com.bjmashibing.system.rpcdemo.rpc.transport.ServerRequestHandler;
 import com.bjmashibing.system.rpcdemo.service.*;
 import com.bjmashibing.system.rpcdemo.util.SerDerUtil;
 import io.netty.bootstrap.ServerBootstrap;
@@ -51,10 +53,8 @@ public class MyRPCTest {
 
     //多多包涵，如果一会翻车，请不要打脸。。。。。
 
-
     @Test
     public void startServer() {
-
         MyCar car = new MyCar();
         MyFly fly = new MyFly();
 
@@ -66,92 +66,97 @@ public class MyRPCTest {
         NioEventLoopGroup boss = new NioEventLoopGroup(20);
         NioEventLoopGroup worker = boss;
 
-        ServerBootstrap sbs = new ServerBootstrap();
-        ChannelFuture bind = sbs.group(boss, worker)
+        ServerBootstrap b = new ServerBootstrap();
+
+        b.group(boss, worker)
                 .channel(NioServerSocketChannel.class)
                 .childHandler(new ChannelInitializer<NioSocketChannel>() {
+
                     @Override
                     protected void initChannel(NioSocketChannel ch) throws Exception {
-                        System.out.println("server accept cliet port: " + ch.remoteAddress().getPort());
+                        System.out.println("server accept client port: " + ch.remoteAddress().getPort());
                         ChannelPipeline p = ch.pipeline();
 
 //                        //1，自定义的rpc
-//                        p.addLast(new ServerDecode());
-//                        p.addLast(new ServerRequestHandler(dis));
+                        p.addLast(new ServerDecode())
+                        .addLast(new ServerRequestHandler(dis));
                         //在自己定义协议的时候你关注过哪些问题：粘包拆包的问题，header+body
 
                         //2，小火车，传输协议用的就是http了  <- 你可以自己学，字节节码byte[]
                         //其实netty提供了一套编解码
-                        p.addLast(new HttpServerCodec())
-                                .addLast(new HttpObjectAggregator(1024*512))
-                                .addLast(new ChannelInboundHandlerAdapter(){
-                                    @Override
-                                    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-                                        //http 协议 ,  这个msg是一个啥：完整的http-request
-                                        FullHttpRequest request = (FullHttpRequest) msg;
-                                        System.out.println(request.toString());  //因为现在sonsumer使用的是一个现成的URL
-
-
-                                        //这个就是consumer 序列化的MyContent
-                                        ByteBuf content = request.content();
-                                        byte[]  data = new byte[content.readableBytes()];
-                                        content.readBytes(data);
-                                        ObjectInputStream oin = new ObjectInputStream(new ByteArrayInputStream(data));
-                                        MyContent myContent = (MyContent)oin.readObject();
-
-                                        String serviceName = myContent.getName();
-                                        String method = myContent.getMethodName();
-                                        Object c = dis.get(serviceName);
-                                        Class<?> clazz = c.getClass();
-                                        Object res = null;
-                                        try {
-
-
-                                            Method m = clazz.getMethod(method, myContent.getParameterTypes());
-                                            res = m.invoke(c, myContent.getArgs());
-
-
-                                        } catch (NoSuchMethodException e) {
-                                            e.printStackTrace();
-                                        } catch (IllegalAccessException e) {
-                                            e.printStackTrace();
-                                        } catch (InvocationTargetException e) {
-                                            e.printStackTrace();
-                                        }
-
-
-                                        MyContent resContent = new MyContent();
-                                        resContent.setRes(res);
-                                        byte[] contentByte = SerDerUtil.ser(resContent);
-
-                                        DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_0,
-                                                HttpResponseStatus.OK,
-                                                Unpooled.copiedBuffer(contentByte));
-
-                                        response.headers().set(HttpHeaderNames.CONTENT_LENGTH,contentByte.length);
-
-                                        //http协议，header+body
-                                        ctx.writeAndFlush(response);
-
-
-                                    }
-                                });
-
+//                        p.addLast(new HttpServerCodec())
+//                                .addLast(new HttpObjectAggregator(1024 * 512))
+//                                .addLast(new ChannelInboundHandlerAdapter() {
+//                                    @Override
+//                                    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+//                                        //http 协议 ,  这个msg是一个啥：完整的http-request
+//                                        FullHttpRequest request = (FullHttpRequest) msg;
+//                                        System.out.println(request);  //因为现在consumer使用的是一个现成的URL
+//
+//
+//                                        //这个就是consumer 序列化的MyContent
+//                                        ByteBuf content = request.content();
+//                                        /*
+//                                        可以读的字节数就是
+//                                         */
+//                                        byte[] data = new byte[content.readableBytes()];
+//                                        content.readBytes(data);
+//                                        ObjectInputStream oin = new ObjectInputStream(new ByteArrayInputStream(data));
+//                                        MyContent myContent = (MyContent) oin.readObject();
+//
+//                                        String serviceName = myContent.getName();
+//                                        String method = myContent.getMethodName();
+//                                        Object c = dis.get(serviceName);
+//                                        Class<?> clazz = c.getClass();
+//                                        Object res = null;
+//                                        try {
+//                                            Method m = clazz.getMethod(method, myContent.getParameterTypes());
+//                                            res = m.invoke(c, myContent.getArgs());
+//                                        } catch (NoSuchMethodException e) {
+//                                            e.printStackTrace();
+//                                        } catch (IllegalAccessException e) {
+//                                            e.printStackTrace();
+//                                        } catch (InvocationTargetException e) {
+//                                            e.printStackTrace();
+//                                        }
+//
+//
+//                                        MyContent resContent = new MyContent();
+//                                        resContent.setRes(res);
+//                                        byte[] contentByte = SerDerUtil.ser(resContent);
+//
+//                                        DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_0,
+//                                                HttpResponseStatus.OK,
+//                                                Unpooled.copiedBuffer(contentByte));
+//
+//                                        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, contentByte.length);
+//
+//                                        //http协议，header+body
+//                                        ctx.writeAndFlush(response);
+//
+//                                    }
+//                                });
 
                     }
-                }).bind(new InetSocketAddress("localhost", 9090));
+                });
+
         try {
-            bind.sync().channel().closeFuture().sync();
+            System.out.println("start server.....");
+            ChannelFuture future = b.bind(new InetSocketAddress("localhost", 9090)).sync();
+
+            future.channel().closeFuture().sync();
+
         } catch (InterruptedException e) {
             e.printStackTrace();
+        } finally {
+            worker.shutdownGracefully();
         }
-
 
     }
 
 
     @Test
-    public void startHttpServer(){
+    public void startHttpServer() {
         MyCar car = new MyCar();
         MyFly fly = new MyFly();
 
@@ -165,7 +170,7 @@ public class MyRPCTest {
         Server server = new Server(new InetSocketAddress("localhost", 9090));
         ServletContextHandler handler = new ServletContextHandler(server, "/");
         server.setHandler(handler);
-        handler.addServlet(MyHttpRpcHandler.class,"/*");  //web.xml
+        handler.addServlet(MyHttpRpcHandler.class, "/*");  //web.xml
 
         try {
             server.start();
@@ -179,21 +184,15 @@ public class MyRPCTest {
     //模拟comsumer端 && provider
     @Test
     public void get() {
-//        new Thread(()->{
-//            startServer();
-//        }).start();
-//
-//        System.out.println("server started......");
-
         AtomicInteger num = new AtomicInteger(0);
-        int size = 50;
+        int size = 1;
         Thread[] threads = new Thread[size];
         for (int i = 0; i < size; i++) {
             threads[i] = new Thread(() -> {
                 Car car = MyProxy.proxyGet(Car.class);//动态代理实现   //是真的要去触发 RPC调用吗？
                 String arg = "hello" + num.incrementAndGet();
                 String res = car.ooxx(arg);
-                System.out.println("client over msg: " + res + " src arg: " + arg);
+                System.out.println(String.format("client src arg: %s, received msg: %s", arg, res));
             });
         }
 
@@ -206,22 +205,14 @@ public class MyRPCTest {
         } catch (IOException e) {
             e.printStackTrace();
         }
-
     }
 
     @Test
     public void testRPC() {
-
         Car car = MyProxy.proxyGet(Car.class);
-        Persion zhangsan = car.oxox("zhangsan", 16);
+        Person zhangsan = car.oxox("zhangsan", 16);
         System.out.println(zhangsan);
     }
-
-
-
-
-
-
 
 
     @Test
@@ -233,10 +224,9 @@ public class MyRPCTest {
         System.out.println("server started......");
 
         Car car = MyProxy.proxyGet(Car.class);
-        Persion zhangsan = car.oxox("zhangsan", 16);
+        Person zhangsan = car.oxox("zhangsan", 16);
         System.out.println(zhangsan);
     }
-
 
 
 }

@@ -2,34 +2,16 @@ package com.bjmashibing.system.rpcdemo.util;
 
 import com.bjmashibing.system.rpcdemo.rpc.protocol.MyContent;
 import com.bjmashibing.system.rpcdemo.rpc.protocol.Myheader;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 
-/**
- * @author: 马士兵教育
- * @create: 2020-07-19 20:47
- */
+@Data
+@AllArgsConstructor
 public class Packmsg {
 
-    Myheader header;
-    MyContent content;
+    private Myheader header;
+    private MyContent content;
 
-    public Myheader getHeader() {
-        return header;
-    }
 
-    public void setHeader(Myheader header) {
-        this.header = header;
-    }
 
-    public MyContent getContent() {
-        return content;
-    }
-
-    public void setContent(MyContent content) {
-        this.content = content;
-    }
-
-    public Packmsg(Myheader header, MyContent content) {
-        this.header = header;
-        this.content = content;
-    }
 }

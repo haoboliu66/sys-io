@@ -9,20 +9,19 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import lombok.extern.java.Log;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
-/**
- * @author: 马士兵教育
- * @create: 2020-08-16 21:13
- */
+
+@Log
 public class ServerRequestHandler extends ChannelInboundHandlerAdapter {
 
     Dispatcher dis;
 
     public ServerRequestHandler(Dispatcher dis) {
-        this.dis=dis;
+        this.dis = dis;
     }
 
     //provider:
@@ -30,6 +29,7 @@ public class ServerRequestHandler extends ChannelInboundHandlerAdapter {
     //
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        log.info("ServerRequestHandler#channelRead: msg class: " + msg.getClass());
 
         Packmsg requestPkg = (Packmsg) msg;
 
@@ -46,10 +46,9 @@ public class ServerRequestHandler extends ChannelInboundHandlerAdapter {
                 Object res = null;
                 try {
 
-
                     Method m = clazz.getMethod(method, requestPkg.getContent().getParameterTypes());
+                    log.info("ServerRequestHandler#channelRead: Method to invoke: " + m.getName());
                     res = m.invoke(c, requestPkg.getContent().getArgs());
-
 
                 } catch (NoSuchMethodException e) {
                     e.printStackTrace();
@@ -59,22 +58,29 @@ public class ServerRequestHandler extends ChannelInboundHandlerAdapter {
                     e.printStackTrace();
                 }
 
-
+                log.info("ServerRequestHandler#channelRead: Generating encoded content & header:");
 //                String execThreadName = Thread.currentThread().getName();
+                /*
+                生成要返回的消息, 并进行编码
+                 */
                 MyContent content = new MyContent();
 //                String s = "io thread: " + ioThreadName + " exec thread: " + execThreadName + " from args:" + requestPkg.content.getArgs()[0];
-                content.setRes(res);
-                byte[] contentByte = SerDerUtil.ser(content);
+                content.setResult(res);
+                byte[] encodedContent = SerDerUtil.ser(content);
 
                 Myheader resHeader = new Myheader();
                 resHeader.setRequestID(requestPkg.getHeader().getRequestID());
                 resHeader.setFlag(0x14141424);
-                resHeader.setDataLen(contentByte.length);
-                byte[] headerByte = SerDerUtil.ser(resHeader);
-                ByteBuf byteBuf = PooledByteBufAllocator.DEFAULT.directBuffer(headerByte.length + contentByte.length);
+                resHeader.setDataLen(encodedContent.length);
+                byte[] encodedHeader = SerDerUtil.ser(resHeader);
 
-                byteBuf.writeBytes(headerByte);
-                byteBuf.writeBytes(contentByte);
+
+                /*
+                消息写回
+                 */
+                ByteBuf byteBuf = PooledByteBufAllocator.DEFAULT.directBuffer(encodedHeader.length + encodedContent.length);
+                byteBuf.writeBytes(encodedHeader);
+                byteBuf.writeBytes(encodedContent);
                 ctx.writeAndFlush(byteBuf);
             }
         });

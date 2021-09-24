@@ -6,10 +6,10 @@ import java.io.Serializable;
  * @author: 马士兵教育
  * @create: 2020-08-16 22:24
  */
-public class Persion implements Serializable {
+public class Person implements Serializable {
 
-    String name ;
-    Integer age ;
+    String name;
+    Integer age;
 
     public String getName() {
         return name;
@@ -29,6 +29,6 @@ public class Persion implements Serializable {
 
     @Override
     public String toString() {
-        return name + " " + age ;
+        return name + " " + age;
     }
 }

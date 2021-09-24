@@ -2,6 +2,7 @@ package com.bjmashibing.system.rpcdemo.rpc.transport;
 
 import com.bjmashibing.system.rpcdemo.rpc.Dispatcher;
 import com.bjmashibing.system.rpcdemo.rpc.protocol.MyContent;
+import lombok.extern.java.Log;
 
 import javax.servlet.ServletException;
 import javax.servlet.ServletInputStream;
@@ -15,10 +16,8 @@ import java.io.ObjectOutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
-/**
- * @author: 马士兵教育
- * @create: 2020-09-06 21:47
- */
+
+@Log
 public class MyHttpRpcHandler extends HttpServlet {
 
     @Override
@@ -35,7 +34,6 @@ public class MyHttpRpcHandler extends HttpServlet {
             Object res = null;
             try {
 
-
                 Method m = clazz.getMethod(method, myContent.getParameterTypes());
                 res = m.invoke(c, myContent.getArgs());
 
@@ -48,9 +46,8 @@ public class MyHttpRpcHandler extends HttpServlet {
                 e.printStackTrace();
             }
 
-
             MyContent resContent = new MyContent();
-            resContent.setRes(res);
+            resContent.setResult(res);
             if(res == null){
                 System.out.println("完蛋了。。。");
             }

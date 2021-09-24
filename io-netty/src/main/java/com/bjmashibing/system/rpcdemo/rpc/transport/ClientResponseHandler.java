@@ -4,16 +4,15 @@ import com.bjmashibing.system.rpcdemo.rpc.ResponseMappingCallback;
 import com.bjmashibing.system.rpcdemo.util.Packmsg;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import lombok.extern.java.Log;
 
-/**
- * @author: 马士兵教育
- * @create: 2020-08-16 21:15
- */
-public class ClientResponses  extends ChannelInboundHandlerAdapter {
+@Log
+public class ClientResponseHandler extends ChannelInboundHandlerAdapter {
 
     //consumer.....
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        System.out.println("ClientResponses - client channel read.....");
         Packmsg responsepkg = (Packmsg) msg;
 
         //曾经我们没考虑返回的事情
