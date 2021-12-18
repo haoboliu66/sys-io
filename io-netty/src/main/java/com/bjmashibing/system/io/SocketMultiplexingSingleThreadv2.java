@@ -15,97 +15,96 @@ import java.util.Set;
 在此种情况下, 为了避免业务操作(readHandler和writeHandler)被重复甚至无限次调起, 要采取key.cancel()的操作,
 cancel操作也会触发system call, 所以就会产生频繁的cancel和register操作
  */
-
 public class SocketMultiplexingSingleThreadv2 {
 
-    private ServerSocketChannel server = null;
-    private Selector selector = null;   //linux 多路复用器（select poll epoll） nginx  event{}
-    int port = 9090;
+  private ServerSocketChannel server;
+  private Selector selector;   //linux 多路复用器（select poll epoll） nginx  event{}
+  private final int port = 9090;
 
-    public void initServer() {
-        try {
-            server = ServerSocketChannel.open();
-            server.configureBlocking(false);
-            server.bind(new InetSocketAddress(port));
-            selector = Selector.open();  //  select  poll  *epoll
-            server.register(selector, SelectionKey.OP_ACCEPT);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+  public void initServer() {
+    try {
+      server = ServerSocketChannel.open();
+      server.configureBlocking(false);
+      server.bind(new InetSocketAddress(port));
+      selector = Selector.open();  //  select  poll  *epoll
+      server.register(selector, SelectionKey.OP_ACCEPT);
+    } catch (final IOException e) {
+      e.printStackTrace();
     }
+  }
 
-    public void start() {
-        initServer();
-        System.out.println("服务器启动了。。。。。");
-        try {
-            while (true) {
+  public void start() {
+    initServer();
+    System.out.println("服务器启动了。。。。。");
+    try {
+      while (true) {
 //                Set<SelectionKey> keys = selector.keys();
 //                System.out.println(keys.size()+"   size");
-                while (selector.select(50) > 0) {
-                    Set<SelectionKey> selectionKeys = selector.selectedKeys();
-                    Iterator<SelectionKey> iter = selectionKeys.iterator();
-                    while (iter.hasNext()) {
-                        SelectionKey key = iter.next();
-                        iter.remove();   // 抹掉用户空间的结果集, 不会触碰内核的fds
-                        if (key.isAcceptable()) {
-                            acceptHandler(key);
-                        } else if (key.isReadable()) {
-                            key.cancel();  //现在多路复用器里把key  cancel了, 避免重复读
+        while (selector.select(50) > 0) {
+          Set<SelectionKey> selectionKeys = selector.selectedKeys();
+          Iterator<SelectionKey> iter = selectionKeys.iterator();
+          while (iter.hasNext()) {
+            SelectionKey key = iter.next();
+            iter.remove();   // 抹掉用户空间的结果集, 不会触碰内核的fds
+
+            if (key.isAcceptable()) {
+              acceptHandler(key);
+
+            } else if (key.isReadable()) {
+              key.cancel();  // 多路复用器里把key  cancel了(加入cancelled set), 避免重复处理
                             /*
                             cancel一个key也会触发系统调用epoll_ctl, 把fd从红黑树中移除
                             epoll_ctl(9, EPOLL_CTL_DEL, 10, 0x7ff4bf53f4e4) = 0
                              */
-                            System.out.println("in.....");
-                            key.interestOps(key.interestOps() | ~SelectionKey.OP_READ);
-
+              key.interestOps(key.interestOps() | ~SelectionKey.OP_READ);
                               /*
                               readHandler还是阻塞的嘛？ 即便抛出了线程去读取，但是在时差里，这个key的read事件会被重复触发
                                 因为readHandler抛出一个新线程, 方法不再阻塞, 直接返回再执行while,
                                 所以会导致while重新执行, 再多次调用readHandler方法, 所以要把这个key cancel
                                */
-                            readHandler(key);
-                            // 在readHandler方法中注册了key的写事件, writeHandler就会被一直调起
+              readHandler(key);
+              // 在readHandler方法中注册了key的写事件, writeHandler就会被一直调起
 
-                        } else if (key.isWritable()) {  //我之前没讲过写的事件！！！
-                            //写事件 <-- send-queue  只要是空的，就一定会给你返回可以写的事件，就会回调我们的写方法
-                            //你真的要明白：什么时候写？不是依赖send-queue是不是有空间
-                            //1，你准备好要写什么了，这是第一步
-                            //2，第二步你才关心send-queue是否有空间
-                            //3，so，读 read 一开始就要注册，但是write依赖以上关系，什么时候用什么时候注册
-                            //4，如果一开始就注册了write的事件，进入死循环，一直调起！！！
-                            key.cancel();
-                            key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
+            } else if (key.isWritable()) {  //我之前没讲过写的事件！！！
+              //写事件 <-- send-queue  只要是空的，就一定会给你返回可以写的事件，就会回调我们的写方法
+              //你真的要明白：什么时候写？不是依赖send-queue是不是有空间
+              //1，你准备好要写什么了，这是第一步
+              //2，第二步你才关心send-queue是否有空间
+              //3，so，读 read 一开始就要注册，但是write依赖以上关系，什么时候用什么时候注册
+              //4，如果一开始就注册了write的事件，进入死循环，一直调起！！！
+              key.cancel();
+              key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
 
-                            writeHandler(key);
-                        }
-                    }
-                }
+              writeHandler(key);
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+          }
         }
+      }
+    } catch (final IOException e) {
+      e.printStackTrace();
     }
+  }
 
-    private void writeHandler(SelectionKey key) {
-        new Thread(() -> {
-            System.out.println("write handler...");
-            SocketChannel client = (SocketChannel) key.channel();
-            ByteBuffer buffer = (ByteBuffer) key.attachment();
-            buffer.flip();
+  private void writeHandler(SelectionKey key) {
+    new Thread(() -> {
+      System.out.println("write handler...");
+      SocketChannel client = (SocketChannel) key.channel();
+      ByteBuffer buffer = (ByteBuffer) key.attachment();
+      buffer.flip();
 
-            while (buffer.hasRemaining()) {
-                try {
-                    client.write(buffer);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            buffer.clear();
+      while (buffer.hasRemaining()) {
+        try {
+          client.write(buffer);
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
+      try {
+        Thread.sleep(2000);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+      buffer.clear();
 //            key.cancel();
 //            try {
 ////                client.shutdownOutput();
@@ -115,57 +114,56 @@ public class SocketMultiplexingSingleThreadv2 {
 //            } catch (IOException e) {
 //                e.printStackTrace();
 //            }
-        }).start();
+    }).start();
+  }
+
+  public void acceptHandler(SelectionKey key) {
+    try {
+      final ServerSocketChannel ssc = (ServerSocketChannel) key.channel();
+      final SocketChannel client = ssc.accept();
+      client.configureBlocking(false);
+      ByteBuffer buffer = ByteBuffer.allocate(8192);
+      client.register(selector, SelectionKey.OP_READ, buffer);
+      System.out.println("-------------------------------------------");
+      System.out.println("新客户端：" + client.getRemoteAddress());
+      System.out.println("-------------------------------------------");
+
+    } catch (final IOException e) {
+      e.printStackTrace();
     }
+  }
 
-    public void acceptHandler(SelectionKey key) {
-        try {
-            ServerSocketChannel ssc = (ServerSocketChannel) key.channel();
-            SocketChannel client = ssc.accept();
-            client.configureBlocking(false);
-            ByteBuffer buffer = ByteBuffer.allocate(8192);
-            client.register(selector, SelectionKey.OP_READ, buffer);
-            System.out.println("-------------------------------------------");
-            System.out.println("新客户端：" + client.getRemoteAddress());
-            System.out.println("-------------------------------------------");
+  public void readHandler(SelectionKey key) {
+    new Thread(() -> {
+      System.out.println("read handler.....");
+      final SocketChannel client = (SocketChannel) key.channel();
+      ByteBuffer buffer = (ByteBuffer) key.attachment();
+      buffer.clear();
+      int read = 0;
+      try {
+        while (true) {
+          read = client.read(buffer);
+          System.out.println(Thread.currentThread().getName() + " " + read);
+          if (read > 0) {
+            key.interestOps(SelectionKey.OP_READ);
 
-        } catch (IOException e) {
-            e.printStackTrace();
+            client.register(key.selector(), SelectionKey.OP_WRITE, buffer);
+          } else if (read == 0) {
+
+            break;
+          } else {
+            client.close();
+            break;
+          }
         }
-    }
+      } catch (final IOException e) {
+        e.printStackTrace();
+      }
+    }).start();
+  }
 
-    public void readHandler(SelectionKey key) {
-        new Thread(() -> {
-            System.out.println("read handler.....");
-            SocketChannel client = (SocketChannel) key.channel();
-            ByteBuffer buffer = (ByteBuffer) key.attachment();
-            buffer.clear();
-            int read = 0;
-            try {
-                while (true) {
-                    read = client.read(buffer);
-                    System.out.println(Thread.currentThread().getName() + " " + read);
-                    if (read > 0) {
-                        key.interestOps(SelectionKey.OP_READ);
-
-                        client.register(key.selector(), SelectionKey.OP_WRITE, buffer);
-                    } else if (read == 0) {
-
-                        break;
-                    } else {
-                        client.close();
-                        break;
-                    }
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }).start();
-
-    }
-
-    public static void main(String[] args) {
-        SocketMultiplexingSingleThreadv2 service = new SocketMultiplexingSingleThreadv2();
-        service.start();
-    }
+  public static void main(String[] args) {
+    final SocketMultiplexingSingleThreadv2 service = new SocketMultiplexingSingleThreadv2();
+    service.start();
+  }
 }

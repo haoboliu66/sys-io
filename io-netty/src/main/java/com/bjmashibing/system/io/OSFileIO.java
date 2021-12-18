@@ -15,7 +15,6 @@ public class OSFileIO {
     static byte[] data = "123456789\n".getBytes();
     static String path = "/root/testfileio/out.txt";
 
-
     public static void main(String[] args) throws Exception {
         switch (args[0]) {
             case "0":
@@ -33,9 +32,7 @@ public class OSFileIO {
         }
     }
 
-
     //最基本的file写
-
     /*
     文件size增长很慢
     */
@@ -61,7 +58,6 @@ public class OSFileIO {
 
 
     //测试 基于文件的NIO
-
     public static void testRandomAccessFileWrite() throws Exception {
 
         RandomAccessFile raf = new RandomAccessFile(path, "rw");
@@ -84,14 +80,14 @@ public class OSFileIO {
         //mmap  生成在 堆外  且和文件映射的 一个ByteBuffer  not  object
         MappedByteBuffer map = rafchannel.map(FileChannel.MapMode.READ_WRITE, 0, 4096);
 
-        map.put("@@@".getBytes());  //不是系统调用  但是数据会到达 内核的pagecache
-        //曾经我们是需要out.write()  这样的系统调用，才能让程序的data 进入内核的pagecache
+        map.put("@@@".getBytes());  //不是系统调用  但是数据会到达 内核的pageCache
+        //曾经我们是需要out.write()  这样的系统调用，才能让程序的data 进入内核的pageCache
         //曾经必须有用户态内核态切换
-        //mmap的内存映射，依然是内核的pagecache体系所约束的！！！
+        //mmap的内存映射，依然是内核的pageCache体系所约束的！！！
         //换言之，丢数据
         //你可以去github上找一些 其他C程序员写的jni扩展库，使用linux内核的Direct IO
-        //直接IO是忽略linux的pagecache
-        //是把pagecache  交给了程序自己开辟一个字节数组当作pagecache，动用代码逻辑来维护一致性/dirty。。。一系列复杂问题
+        //直接IO是忽略linux的pageCache
+        //是把pageCache  交给了程序自己开辟一个字节数组当作pageCache，动用代码逻辑来维护一致性/dirty。。。一系列复杂问题
 
         System.out.println("map--put--------");
         System.in.read();
@@ -112,9 +108,7 @@ public class OSFileIO {
             Thread.sleep(200);
             System.out.print(((char) buffer.get(i)));
         }
-
     }
-
 
     @Test
     public void whatByteBuffer() {
