@@ -10,7 +10,8 @@ Icon
 *.iml
 .idea/*
 /idea/
-*/.idea/
+io-netty/.idea/
+io-netty/.idea/*
 ./.idea/
 
 */*.txt
